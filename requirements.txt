@@ -1,0 +1,9 @@
+aiohttp
+aiomysql
+python-dateutil
+langdetect
+PyYAML
+feedparser
+beautifulsoup4
+python-dotenv
+openai

@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS rssSources (
 -- 创建文章表
 CREATE TABLE IF NOT EXISTS articles (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    guid CHAR(36) UNIQUE,
+    guid CHAR(36),
     source_id INT NOT NULL,
     url VARCHAR(2083) NOT NULL,
     url_hash VARCHAR(64) NOT NULL,
@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS articles (
     language VARCHAR(50),
     read_time INT,
     last_updated_at DATETIME,
-    FOREIGN KEY (source_id) REFERENCES rssSources(id),
     UNIQUE KEY (url_hash)
 );
 
@@ -52,10 +51,7 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE TABLE IF NOT EXISTS userRssSources (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    source_id INT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (source_id) REFERENCES rssSources(id),
-    UNIQUE KEY (user_id, source_id)
+    source_id INT NOT NULL
 );
 
 -- 创建用户关注点表
@@ -63,8 +59,7 @@ CREATE TABLE IF NOT EXISTS userFocuses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     type ENUM('tag', 'content') NOT NULL,
-    content TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id)
+    content TEXT NOT NULL
 );
 
 -- 创建关注内容表
@@ -73,10 +68,7 @@ CREATE TABLE IF NOT EXISTS focusedContents (
     user_id INT NOT NULL,
     article_id BIGINT NOT NULL,
     focus_id INT NOT NULL,
-    created_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (article_id) REFERENCES articles(id),
-    FOREIGN KEY (focus_id) REFERENCES userFocuses(id)
+    created_at DATETIME
 );
 
 -- 创建用户文章状态表
@@ -85,37 +77,28 @@ CREATE TABLE IF NOT EXISTS userArticleStatus (
     user_id INT NOT NULL,
     article_id BIGINT NOT NULL,
     status ENUM('unread', 'read', 'read_later') NOT NULL,
-    updated_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (article_id) REFERENCES articles(id),
-    UNIQUE KEY (user_id, article_id)
+    updated_at DATETIME
 );
 
 -- 创建标签类别表
 CREATE TABLE IF NOT EXISTS tag_categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    description TEXT,
-    UNIQUE KEY (name)
+    description TEXT
 );
 
 -- 创建标签表
 CREATE TABLE IF NOT EXISTS tags (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    category_id INT,
-    FOREIGN KEY (category_id) REFERENCES tag_categories(id),
-    UNIQUE KEY (name)
+    category_id INT
 );
 
 -- 创建文章-标签关联表
 CREATE TABLE IF NOT EXISTS article_tags (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     article_id BIGINT NOT NULL,
-    tag_id INT NOT NULL,
-    FOREIGN KEY (article_id) REFERENCES articles(id),
-    FOREIGN KEY (tag_id) REFERENCES tags(id),
-    UNIQUE KEY (article_id, tag_id)
+    tag_id INT NOT NULL
 );
 
 -- 插入标签类别数据
