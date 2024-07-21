@@ -2,6 +2,8 @@ aiohttp
 aiomysql
 python-dateutil
 langdetect
+requests
+lxml
 PyYAML
 feedparser
 beautifulsoup4

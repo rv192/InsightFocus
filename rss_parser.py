@@ -1,11 +1,24 @@
 import feedparser
 import asyncio
 import uuid
+import requests
 from db_operations import fetch_rss_sources
+from lxml import etree
 
 async def fetch_rss_feed(url):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, feedparser.parse, url)
+    try:
+        # 使用 lxml 来处理可能的 XML 格式问题
+        response = await loop.run_in_executor(None, requests.get, url)
+        parser = etree.XMLParser(recover=True)
+        tree = etree.fromstring(response.content, parser=parser)
+        rss_data = etree.tostring(tree)
+        
+        # 使用 feedparser 解析修复后的数据
+        return feedparser.parse(rss_data)
+    except Exception as e:
+        print(f"Error fetching or parsing {url}: {e}")
+        return feedparser.FeedParserDict(entries=[])
 
 async def fetch_all_rss_sources(db_pool):
     sources = await fetch_rss_sources(db_pool)
