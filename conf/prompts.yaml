@@ -45,3 +45,22 @@ categorize_tags: >
           {"name": "Tag3", "category_id": Z}
       ]
   }
+
+categorize_article_system: >
+  你是一个文章分类助手。请根据给定的文章信息，将文章准确地分类到预定义类别中。
+
+categorize_article: >
+  给定以下预定义类别：
+  $categories_info
+
+  请考虑以下文章信息：
+  标题: $title
+  摘要: $summary
+  标签: $tags
+
+  请将此文章分类到最匹配的预定义类别中。
+
+  回复格式：
+  {
+      "category_id": X
+  }

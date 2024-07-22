@@ -2,8 +2,9 @@ import os
 import json
 import logging
 import re
-from collections import defaultdict
 from string import Template
+import functools
+import asyncio
 
 import yaml
 from openai import AsyncOpenAI
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 
 # 常量定义
 CATEGORIES = [
+    (0, '待分类'),
     (1, '新闻与时事'),
     (2, '科技与创新'),
     (3, '商业与金融'),
@@ -31,6 +33,24 @@ class ConfigError(Exception):
 class AIAPIError(Exception):
     pass
 
+def async_retry(max_tries=3, delay_seconds=1):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            tries = 0
+            while tries < max_tries:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    tries += 1
+                    if tries == max_tries:
+                        logging.error(f"函数 {func.__name__} 在 {max_tries} 次尝试后失败: {str(e)}")
+                        raise
+                    logging.warning(f"函数 {func.__name__} 失败，正在重试 ({tries}/{max_tries}): {str(e)}")
+                    await asyncio.sleep(delay_seconds)
+        return wrapper
+    return decorator
+
 def load_config():
     load_dotenv()
     with open(os.path.join('./conf', 'prompts.yaml'), 'r', encoding='utf-8') as file:
@@ -46,6 +66,7 @@ def create_ai_client(config_name):
     except (json.JSONDecodeError, KeyError) as e:
         raise ConfigError(f"Invalid configuration for {config_name}: {str(e)}")
 
+@async_retry(max_tries=3, delay_seconds=2)
 async def call_ai_api(client, model, system_message, user_message):
     try:
         response = await client.chat.completions.create(
@@ -56,14 +77,18 @@ async def call_ai_api(client, model, system_message, user_message):
             ]
         )
         content = response.choices[0].message.content
-        return json.loads(content)
-    except json.JSONDecodeError:
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(0))
-        raise AIAPIError("Failed to parse JSON from API response")
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            else:
+                logging.error(f"无法解析 AI 响应为 JSON: {content}")
+                raise ValueError("Invalid JSON response from AI")
     except Exception as e:
-        raise AIAPIError(f"AI API call failed: {str(e)}")
+        logging.error(f"AI API 调用失败: {str(e)}")
+        raise
 
 async def process_content(title, content):
     client = create_ai_client('CONTENT_PROCESSOR')
@@ -73,7 +98,7 @@ async def process_content(title, content):
     if not prompt_template:
         raise ConfigError("process_content prompt not found")
     
-    prompt = Template(prompt_template).safe_substitute(title=title, content=content[:3500])
+    prompt = Template(prompt_template).safe_substitute(title=title, content=content)
     
     try:
         result = await call_ai_api(client, config['model'], PROMPTS.get('process_content_system', ""), prompt)
@@ -85,7 +110,7 @@ async def process_content(title, content):
     except AIAPIError as e:
         logging.error(f"Content processing failed: {str(e)}")
         return {'processed_content': '', 'summary': '', 'tags': []}
-
+    
 async def categorize_tags(tags, title, summary):
     if not tags:
         return []
@@ -104,3 +129,19 @@ async def categorize_tags(tags, title, summary):
     except AIAPIError as e:
         logging.error(f"Tag categorization failed: {str(e)}")
         return []
+
+async def categorize_article(title, summary, tags):
+    client = create_ai_client('ARTICLE_CATEGORIZER')
+    config = json.loads(os.getenv('ARTICLE_CATEGORIZER_CONFIG'))
+    categories_info = "\n".join(f"{id}. {name}" for id, name in CATEGORIES)
+    
+    prompt = Template(PROMPTS['categorize_article']).safe_substitute(
+        categories_info=categories_info, title=title, summary=summary, tags=', '.join(tags)
+    )
+    
+    try:
+        result = await call_ai_api(client, config['model'], PROMPTS['categorize_article_system'], prompt)
+        return result.get('category_id')
+    except AIAPIError as e:
+        logging.error(f"Article categorization failed: {str(e)}")
+        return None

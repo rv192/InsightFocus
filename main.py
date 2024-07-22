@@ -10,7 +10,7 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-async def main():
+async def main(): 
     db_pool = None
     try:
         db_pool = await get_db_pool()

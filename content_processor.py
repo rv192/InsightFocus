@@ -3,7 +3,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from utils import hash_text, detect_language, estimate_read_time
-from ai_processor import CATEGORIES, process_content, categorize_tags
+from ai_processor import CATEGORIES, process_content, categorize_article
 from db_operations import with_transaction, process_rss_item_transaction, check_existing_article
 
 async def process_rss_items(db_pool, rss_items):
@@ -43,21 +43,28 @@ async def process_rss_items(db_pool, rss_items):
                 tags = []
             else:
                 logging.info(f"AI处理完成，项目：{item['url']}")
-                processed_plain_content = ai_result['processed_content'] or original_plain_content
-                summary = ai_result['summary']
-                tags = ai_result['tags']
+                processed_plain_content = ai_result.get('processed_content') or original_plain_content
+                summary = ai_result.get('summary', "")
+                tags = ai_result.get('tags', [])
 
-            categorized_tags = await categorize_tags(tags, item['title'], summary)
+            # 使用新的categorize_article函数
+            category_id = await categorize_article(item['title'], summary, tags)
+
+            if category_id is None:
+                logging.warning(f"文章分类失败，项目：{item['url']}。使用默认分类。")
+                category_id = 0  # 使用默认分类，'待分类'
 
             language = detect_language(processed_plain_content)
             read_time = estimate_read_time(processed_plain_content)                
 
-            for tag in categorized_tags:
-                category_name = next((category[1] for category in CATEGORIES if category[0] == tag['category_id']), None)
+            if category_id is not None:
+                category_name = next((category[1] for category in CATEGORIES if category[0] == category_id), None)
                 if category_name:
-                    logging.info(f"标签名称：{tag['name']}, 分类ID：{tag['category_id']}, 分类名称：{category_name}")
+                    logging.info(f"文章分类ID：{category_id}, 分类名称：{category_name}")
                 else:
-                    logging.warning(f"未找到分类ID：{tag['category_id']}对应的分类名称")
+                    logging.warning(f"未找到分类ID：{category_id}对应的分类名称")
+            else:
+                logging.warning(f"文章分类失败，项目：{item['url']}")
 
             # 在一个事务中处理整个RSS项目
             await with_transaction(
@@ -69,13 +76,15 @@ async def process_rss_items(db_pool, rss_items):
                 content_hash, 
                 processed_plain_content, 
                 summary, 
-                categorized_tags, 
+                tags,   
+                category_id,
                 language, 
                 read_time
             )
 
         except Exception as e:
             logging.error(f"处理项目时出错 {item['url']}: {str(e)}")
+            continue
             
 def extract_plain_content(html_content):
     if not html_content:

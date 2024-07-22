@@ -49,9 +49,9 @@ async def check_existing_article(cur, url_hash=None, content_hash=None):
 
 async def insert_article(cur, article_data):
     query = """
-    INSERT INTO articles (guid, source_id, url, url_hash, title, content, plain_content, 
+    INSERT INTO articles (guid, source_id, category_id, url, url_hash, title, content, plain_content, 
                           content_hash, published_at, fetched_at, summary, language, read_time, last_updated_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
     title = VALUES(title),
     content = VALUES(content),
@@ -61,10 +61,11 @@ async def insert_article(cur, article_data):
     summary = VALUES(summary),
     language = VALUES(language),
     read_time = VALUES(read_time),
-    last_updated_at = VALUES(last_updated_at)
+    last_updated_at = VALUES(last_updated_at),
+    category_id = VALUES(category_id)
     """
     values = [article_data.get(key) for key in [
-        'guid', 'source_id', 'url', 'url_hash', 'title', 'content', 'plain_content',
+        'guid', 'source_id', 'category_id', 'url', 'url_hash', 'title', 'content', 'plain_content',
         'content_hash', 'published_at', 'fetched_at', 'summary', 'language', 'read_time'
     ]]
     values.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))  # last_updated_at
@@ -73,18 +74,19 @@ async def insert_article(cur, article_data):
 
 async def insert_tags(cur, article_id, tags):
     for tag in tags:
-        # Insert tag if not exists
-        await cur.execute("INSERT IGNORE INTO tags (name, category_id) VALUES (%s, %s)", (tag['name'], tag['category_id']))
+        # 检查标签是否存在
+        await cur.execute("SELECT id FROM tags WHERE name = %s", (tag,))
+        result = await cur.fetchone()
         
-        # Get tag id
-        await cur.execute("SELECT id FROM tags WHERE name = %s", (tag['name'],))
-        tag_id = await cur.fetchone()
-        
-        if tag_id:
-            # Insert article-tag relation
-            await cur.execute("INSERT IGNORE INTO article_tags (article_id, tag_id) VALUES (%s, %s)", (article_id, tag_id[0]))
+        if result:
+            tag_id = result[0]
         else:
-            logging.warning(f"Tag not found after insertion: {tag['name']}")
+            # 如果标签不存在，则插入
+            await cur.execute("INSERT INTO tags (name) VALUES (%s)", (tag,))
+            tag_id = cur.lastrowid
+        
+        # 插入文章-标签关联
+        await cur.execute("INSERT IGNORE INTO article_tags (article_id, tag_id) VALUES (%s, %s)", (article_id, tag_id))
 
 async def update_rss_source_last_fetched(cur, source_id):
     await cur.execute("""
@@ -93,7 +95,7 @@ async def update_rss_source_last_fetched(cur, source_id):
         WHERE id = %s
     """, (source_id,))
 
-async def process_rss_item_transaction(cur, item, original_plain_content, url_hash, content_hash, processed_plain_content, summary, categorized_tags, language, read_time):
+async def process_rss_item_transaction(cur, item, original_plain_content, url_hash, content_hash, processed_plain_content, summary, tags, category_id, language, read_time):
     published_at = parse_datetime(item['published_at'])
     if not published_at:
         logging.error(f"解析published_at日期失败，项目：{item['url']}")
@@ -102,6 +104,7 @@ async def process_rss_item_transaction(cur, item, original_plain_content, url_ha
     article_data = {
         'guid': item['guid'],
         'source_id': item['source_id'],
+        'category_id': category_id,
         'url': item['url'],
         'url_hash': url_hash,
         'title': item['title'],
@@ -119,7 +122,7 @@ async def process_rss_item_transaction(cur, item, original_plain_content, url_ha
     
     if article_id:
         logging.info(f"文章已插入，ID：{article_id}")
-        await insert_tags(cur, article_id, categorized_tags)
+        await insert_tags(cur, article_id, tags)
         logging.info(f"标签已插入，文章ID：{article_id}")
         await update_rss_source_last_fetched(cur, item['source_id'])
     else:
