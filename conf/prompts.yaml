@@ -23,29 +23,6 @@ process_content: >
   如果输入内容已经是干净的文本，请将"processed_content"设置为空字符串；
   摘要的第一句话:如果内容是新闻，应遵循新闻NTC三要素：即新(New)、‌事实(Truth)、‌报道(Communication)，否则应符合五要素："人、‌时、‌地、‌事、‌意"。基于文章的核心主题提取三个关键词作为TAG。
 
-categorize_tags_system: >
-  你是一个标签分类助手。请根据给定的文章信息和标签，将标签准确地分类到预定义类别中。
-
-categorize_tags: >
-  给定以下预定义类别：
-  $categories_info
-
-  请考虑以下文章信息：
-  标题: $title
-  摘要: $summary
-
-  请将以下TAG归类到最匹配的预定义类别中，不改变TAG本身。参考文章的标题和摘要来确保分类的准确性：
-  $tags
-
-  回复格式：
-  {
-      "tags": [
-          {"name": "Tag1", "category_id": X},
-          {"name": "Tag2", "category_id": Y},
-          {"name": "Tag3", "category_id": Z}
-      ]
-  }
-
 categorize_article_system: >
   你是一个文章分类助手。请根据给定的文章信息，将文章准确地分类到预定义类别中。
 
@@ -64,3 +41,16 @@ categorize_article: >
   {
       "category_id": X
   }
+
+judge_article_relevance: >
+  请判断以下文章是否与用户的关注内容相关：
+
+  文章标题：$article_title
+  文章摘要：$article_summary
+
+  用户关注内容：$focus_content
+
+  请回答是否相关，并简要解释原因。请以 JSON 格式返回结果，包含 "is_relevant" (布尔值) 和 "reason" (字符串) 两个字段。
+
+judge_article_relevance_system: >
+  你是一个智能助手，专门用于判断文章是否符合用户的关注兴趣。请仔细分析文章的标题和摘要，并将其与用户的关注类型和内容进行比较。给出准确的判断和简洁的解释。

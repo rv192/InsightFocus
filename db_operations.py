@@ -2,7 +2,7 @@ import logging
 import os
 import aiomysql
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from utils import parse_datetime
 
@@ -133,3 +133,50 @@ async def fetch_rss_sources(pool):
         async with conn.cursor() as cur:
             await cur.execute("SELECT id, url FROM rssSources")
             return await cur.fetchall()
+        
+async def get_recent_articles(cur, hours=24):
+    """获取最近24小时内入库的文章"""
+    query = """
+    SELECT id, title, plain_content, summary
+    FROM articles
+    WHERE fetched_at >= %s
+    """
+    time_threshold = datetime.now() - timedelta(hours=hours)
+    await cur.execute(query, (time_threshold,))
+    results = await cur.fetchall()
+    return [
+        {
+            'id': row[0],
+            'title': row[1],
+            'plain_content': row[2],
+            'summary': row[3]
+        }
+        for row in results
+    ]
+
+async def get_user_focuses(cur, user_id):
+    """获取用户的关注内容描述"""
+    query = """
+    SELECT id, type, content
+    FROM userFocuses
+    WHERE user_id = %s
+    """
+    await cur.execute(query, (user_id,))
+    results = await cur.fetchall()
+    return [
+        {
+            'id': row[0],
+            'type': row[1],
+            'content': row[2]
+        }
+        for row in results
+    ]
+
+async def add_to_focused_contents(cur, user_id, article_id, focus_id):
+    """将符合用户关注的文章添加到关注清单中"""
+    query = """
+    INSERT INTO focusedContents (user_id, article_id, focus_id, created_at)
+    VALUES (%s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE created_at = VALUES(created_at)
+    """
+    await cur.execute(query, (user_id, article_id, focus_id, datetime.now()))

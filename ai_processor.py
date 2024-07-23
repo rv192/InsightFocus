@@ -5,6 +5,7 @@ import re
 from string import Template
 import functools
 import asyncio
+from typing import Any, Dict
 
 import yaml
 from openai import AsyncOpenAI
@@ -110,25 +111,6 @@ async def process_content(title, content):
     except AIAPIError as e:
         logging.error(f"Content processing failed: {str(e)}")
         return {'processed_content': '', 'summary': '', 'tags': []}
-    
-async def categorize_tags(tags, title, summary):
-    if not tags:
-        return []
-    
-    client = create_ai_client('TAG_CATEGORIZER')
-    config = json.loads(os.getenv('TAG_CATEGORIZER_CONFIG'))
-    categories_info = "\n".join(f"{id}. {name}" for id, name in CATEGORIES)
-    
-    prompt = Template(PROMPTS['categorize_tags']).safe_substitute(
-        categories_info=categories_info, title=title, summary=summary, tags=', '.join(tags)
-    )
-    
-    try:
-        result = await call_ai_api(client, config['model'], PROMPTS['categorize_tags_system'], prompt)
-        return result.get('tags', [])
-    except AIAPIError as e:
-        logging.error(f"Tag categorization failed: {str(e)}")
-        return []
 
 async def categorize_article(title, summary, tags):
     client = create_ai_client('ARTICLE_CATEGORIZER')
@@ -145,3 +127,29 @@ async def categorize_article(title, summary, tags):
     except AIAPIError as e:
         logging.error(f"Article categorization failed: {str(e)}")
         return None
+
+async def judge_article_relevance(article, focus) -> bool:
+    client = create_ai_client('FOCUS_MATCHER')
+    config = json.loads(os.getenv('FOCUS_MATCHER_CONFIG'))
+    
+    prompt_template = PROMPTS.get('judge_article_relevance')
+    if not prompt_template:
+        raise ConfigError("judge_article_relevance prompt not found")
+    
+    prompt = Template(prompt_template).safe_substitute(
+        article_title=article['title'],
+        article_summary=article['summary'],
+        focus_content=focus
+    )
+    
+    try:
+        result = await call_ai_api(client, config['model'], PROMPTS.get('judge_article_relevance_system', ""), prompt)
+
+        isPass = result.get('is_relevant')
+        reason = result.get('reason')
+        logging.info(f"{isPass}：{reason}")
+
+        return result.get('is_relevant', False)
+    except AIAPIError as e:
+        logging.error(f"Article relevance judgment failed: {str(e)}")
+        return False
