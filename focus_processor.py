@@ -1,8 +1,7 @@
 import logging
-from datetime import datetime, timedelta
 
+from agents.userFocusAgent import UserFocusAgent
 from db_operations import with_transaction, get_recent_articles, get_user_focuses, add_to_focused_contents
-from ai_processor import judge_article_relevance  # 假设我们有这个函数来判断文章相关性
 
 async def process_user_focuses(db_pool):
     logging.info("开始处理用户关注内容")
@@ -27,7 +26,7 @@ async def process_user_focus(db_pool, user_id, recent_articles):
     
     for article in recent_articles:
         for focus in user_focuses:
-            is_relevant = await judge_article_relevance(article, focus['content'])
+            is_relevant = await UserFocusAgent().judge_article_relevance(article, focus['content'])
             
             if is_relevant:
                 await with_transaction(

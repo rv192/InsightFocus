@@ -4,6 +4,7 @@ import aiomysql
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
+from conf.consts import GENRES, TOPICS
 from utils import parse_datetime
 
 load_dotenv()
@@ -49,9 +50,9 @@ async def check_existing_article(cur, url_hash=None, content_hash=None):
 
 async def insert_article(cur, article_data):
     query = """
-    INSERT INTO articles (guid, source_id, category_id, url, url_hash, title, content, plain_content, 
+    INSERT INTO articles (guid, source_id, genre_id, topic_id, url, url_hash, title, content, plain_content, 
                           content_hash, published_at, fetched_at, summary, language, read_time, last_updated_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
     title = VALUES(title),
     content = VALUES(content),
@@ -62,10 +63,11 @@ async def insert_article(cur, article_data):
     language = VALUES(language),
     read_time = VALUES(read_time),
     last_updated_at = VALUES(last_updated_at),
-    category_id = VALUES(category_id)
+    topic_id = VALUES(topic_id),
+    genre_id = VALUES(genre_id)
     """
     values = [article_data.get(key) for key in [
-        'guid', 'source_id', 'category_id', 'url', 'url_hash', 'title', 'content', 'plain_content',
+        'guid', 'source_id', 'genre_id', 'topic_id', 'url', 'url_hash', 'title', 'content', 'plain_content',
         'content_hash', 'published_at', 'fetched_at', 'summary', 'language', 'read_time'
     ]]
     values.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))  # last_updated_at
@@ -95,7 +97,7 @@ async def update_rss_source_last_fetched(cur, source_id):
         WHERE id = %s
     """, (source_id,))
 
-async def process_rss_item_transaction(cur, item, original_plain_content, url_hash, content_hash, processed_plain_content, summary, tags, category_id, language, read_time):
+async def process_rss_item_transaction(cur, item, original_plain_content, url_hash, content_hash, processed_plain_content, summary, tags, genre_id, topic_id, language, read_time):
     published_at = parse_datetime(item['published_at'])
     if not published_at:
         logging.error(f"解析published_at日期失败，项目：{item['url']}")
@@ -104,7 +106,8 @@ async def process_rss_item_transaction(cur, item, original_plain_content, url_ha
     article_data = {
         'guid': item['guid'],
         'source_id': item['source_id'],
-        'category_id': category_id,
+        'genre_id': genre_id,
+        'topic_id': topic_id,
         'url': item['url'],
         'url_hash': url_hash,
         'title': item['title'],
@@ -137,27 +140,38 @@ async def fetch_rss_sources(pool):
 async def get_recent_articles(cur, hours=24):
     """获取最近24小时内入库的文章"""
     query = """
-    SELECT id, title, plain_content, summary
+    SELECT id, genre_id, topic_id, title, plain_content, summary
     FROM articles
     WHERE fetched_at >= %s
     """
     time_threshold = datetime.now() - timedelta(hours=hours)
     await cur.execute(query, (time_threshold,))
     results = await cur.fetchall()
-    return [
+    # 创建类型和分类的映射字典
+    genre_mapping = {t[0]: t[1] for t in GENRES}
+    topic_mapping = {c[0]: c[1] for c in TOPICS}
+
+    # 处理查询结果，并添加类型和分类信息
+    articles = [
         {
             'id': row[0],
-            'title': row[1],
-            'plain_content': row[2],
-            'summary': row[3]
+            'genre_id': row[1],
+            'topic_id': row[2],
+            'title': row[3],
+            'plain_content': row[4],
+            'summary': row[5],
+            'genre': genre_mapping.get(row[1], '未知类型'),
+            'topic': topic_mapping.get(row[2], '未知分类')
         }
         for row in results
     ]
+    
+    return articles
 
 async def get_user_focuses(cur, user_id):
     """获取用户的关注内容描述"""
     query = """
-    SELECT id, type, content
+    SELECT id, content
     FROM userFocuses
     WHERE user_id = %s
     """
@@ -166,8 +180,7 @@ async def get_user_focuses(cur, user_id):
     return [
         {
             'id': row[0],
-            'type': row[1],
-            'content': row[2]
+            'content': row[1]
         }
         for row in results
     ]

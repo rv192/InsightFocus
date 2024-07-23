@@ -11,7 +11,7 @@ process_content: >
   请提供一个JSON格式的中文回复，包含以下信息：
   1. 处理后的纯文本内容：如果输入的内容已经是干净的文章正文，返回空字符串。否则，剔除任何非文章正文内容并返回清理后的文章正文（原文非摘要）。
   2. 简明扼要的摘要（最多300字）
-  3. 最多3个相关的TAG（不需要归类）
+  3. 最多3个相关的TAG
 
   回复格式：
   {
@@ -23,23 +23,27 @@ process_content: >
   如果输入内容已经是干净的文本，请将"processed_content"设置为空字符串；
   摘要的第一句话:如果内容是新闻，应遵循新闻NTC三要素：即新(New)、‌事实(Truth)、‌报道(Communication)，否则应符合五要素："人、‌时、‌地、‌事、‌意"。基于文章的核心主题提取三个关键词作为TAG。
 
-categorize_article_system: >
+classify_article_system: >
   你是一个文章分类助手。请根据给定的文章信息，将文章准确地分类到预定义类别中。
 
-categorize_article: >
+classify_article: >
   给定以下预定义类别：
-  $categories_info
+  体裁:
+    $genres_info
+  主题:
+    $topics_info
 
   请考虑以下文章信息：
   标题: $title
   摘要: $summary
   标签: $tags
 
-  请将此文章分类到最匹配的预定义类别中。
+  请将此文章分类到最匹配的题材下，再识别内容归属的主题
 
   回复格式：
   {
-      "category_id": X
+      "topic_id": X,
+      "genre_id": Y
   }
 
 judge_article_relevance: >
@@ -53,4 +57,4 @@ judge_article_relevance: >
   请回答是否相关，并简要解释原因。请以 JSON 格式返回结果，包含 "is_relevant" (布尔值) 和 "reason" (字符串) 两个字段。
 
 judge_article_relevance_system: >
-  你是一个智能助手，专门用于判断文章是否符合用户的关注兴趣。请仔细分析文章的标题和摘要，并将其与用户的关注类型和内容进行比较。给出准确的判断和简洁的解释。
+  你是一个中文智能助手，专门用于判断文章是否符合用户的关注兴趣。请仔细分析文章的标题和摘要，并将其与用户的关注类型和内容进行比较。给出中文判断原因，不要提到用户的关注内容。

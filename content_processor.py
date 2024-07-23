@@ -2,8 +2,9 @@ import logging
 
 from bs4 import BeautifulSoup
 
+from agents.summaryAgent import SummaryAgent
+from conf.consts import GENRES, TOPICS
 from utils import hash_text, detect_language, estimate_read_time
-from ai_processor import CATEGORIES, process_content, categorize_article
 from db_operations import with_transaction, process_rss_item_transaction, check_existing_article
 
 async def process_rss_items(db_pool, rss_items):
@@ -34,37 +35,53 @@ async def process_rss_items(db_pool, rss_items):
             continue
         
         try:
-            ai_result = await process_content(item['title'], original_plain_content)
+            ai_result = await SummaryAgent().process_content(item['title'], original_plain_content)
             
             if ai_result is None:
-                logging.warning(f"AI处理失败，项目：{item['url']}。使用原始内容。")
+                logging.warning(f"AI摘要处理失败，项目：{item['url']}。使用原始内容。")
                 processed_plain_content = original_plain_content
                 summary = ""
                 tags = []
             else:
-                logging.info(f"AI处理完成，项目：{item['url']}")
+                logging.info(f"AI摘要处理完成，项目：{item['url']}")
                 processed_plain_content = ai_result.get('processed_content') or original_plain_content
                 summary = ai_result.get('summary', "")
                 tags = ai_result.get('tags', [])
+                logging.info(f"Tags: {', '.join(tags)}")
 
-            # 使用新的categorize_article函数
-            category_id = await categorize_article(item['title'], summary, tags)
 
-            if category_id is None:
+            # 使用新的classify_article函数
+            classifiedInfo = await SummaryAgent().classify_article(item['title'], summary, tags)
+
+            genre_id = 0  # 默认题材ID
+            topic_id = 0  # 默认主题ID
+
+            if classifiedInfo:
+                genre_id = classifiedInfo.get('genre_id', 0)
+                topic_id = classifiedInfo.get('topic_id', 0)
+
+                # 定义一个辅助函数来获取名称
+                def get_name(id, id_list):
+                    return next((name for _id, name, _ in id_list if _id == id), None)
+
+                # 获取类型名称
+                genre_name = get_name(genre_id, GENRES)
+                if genre_name:
+                    logging.info(f"文章题材ID：{genre_id}, 题材：{genre_name}")
+                else:
+                    logging.warning(f"未找到题材ID：{genre_id}对应的题材名，项目：{item['url']}")
+
+                # 获取分类名称
+                topic_name = get_name(topic_id, TOPICS)
+                if topic_name:
+                    logging.info(f"文章主题ID：{topic_id}, 主题名：{topic_name}")
+                else:
+                    logging.warning(f"未找到主题ID：{topic_id}对应的主题名称，项目：{item['url']}")
+            else:
                 logging.warning(f"文章分类失败，项目：{item['url']}。使用默认分类。")
-                category_id = 0  # 使用默认分类，'待分类'
 
             language = detect_language(processed_plain_content)
-            read_time = estimate_read_time(processed_plain_content)                
-
-            if category_id is not None:
-                category_name = next((category[1] for category in CATEGORIES if category[0] == category_id), None)
-                if category_name:
-                    logging.info(f"文章分类ID：{category_id}, 分类名称：{category_name}")
-                else:
-                    logging.warning(f"未找到分类ID：{category_id}对应的分类名称")
-            else:
-                logging.warning(f"文章分类失败，项目：{item['url']}")
+            read_time = estimate_read_time(processed_plain_content)
 
             # 在一个事务中处理整个RSS项目
             await with_transaction(
@@ -76,8 +93,9 @@ async def process_rss_items(db_pool, rss_items):
                 content_hash, 
                 processed_plain_content, 
                 summary, 
-                tags,   
-                category_id,
+                tags, 
+                genre_id,
+                topic_id,
                 language, 
                 read_time
             )
