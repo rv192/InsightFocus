@@ -1,8 +1,11 @@
 aiohttp
 aiomysql
 python-dateutil
+pyppeteer
 langdetect
 requests
+trafilatura
+tiktoken
 lxml
 PyYAML
 feedparser

@@ -39,25 +39,25 @@ async def with_transaction(pool, func, *args, **kwargs):
                 logging.error(f"Transaction failed: {str(e)}")
                 raise
 
-async def check_existing_article(cur, url_hash=None, content_hash=None):
+async def check_existing_article(cur, url_hash=None, html_hash=None):
     if url_hash:
         await cur.execute("SELECT id FROM articles WHERE url_hash = %s", (url_hash,))
-    elif content_hash:
-        await cur.execute("SELECT id FROM articles WHERE content_hash = %s", (content_hash,))
+    elif html_hash:
+        await cur.execute("SELECT id FROM articles WHERE html_hash = %s", (html_hash,))
     else:
         return None
     return await cur.fetchone()
 
 async def insert_article(cur, article_data):
     query = """
-    INSERT INTO articles (guid, source_id, genre_id, topic_id, url, url_hash, title, content, plain_content, 
-                          content_hash, published_at, fetched_at, summary, language, read_time, last_updated_at)
+    INSERT INTO articles (guid, source_id, genre_id, topic_id, url, url_hash, title, original_html, plain_content, 
+                          html_hash, published_at, fetched_at, summary, language, read_time, last_updated_at)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
     title = VALUES(title),
-    content = VALUES(content),
+    original_html = VALUES(original_html),
     plain_content = VALUES(plain_content),
-    content_hash = VALUES(content_hash),
+    html_hash = VALUES(html_hash),
     fetched_at = VALUES(fetched_at),
     summary = VALUES(summary),
     language = VALUES(language),
@@ -67,8 +67,8 @@ async def insert_article(cur, article_data):
     genre_id = VALUES(genre_id)
     """
     values = [article_data.get(key) for key in [
-        'guid', 'source_id', 'genre_id', 'topic_id', 'url', 'url_hash', 'title', 'content', 'plain_content',
-        'content_hash', 'published_at', 'fetched_at', 'summary', 'language', 'read_time'
+        'guid', 'source_id', 'genre_id', 'topic_id', 'url', 'url_hash', 'title', 'original_html', 'plain_content',
+        'html_hash', 'published_at', 'fetched_at', 'summary', 'language', 'read_time'
     ]]
     values.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))  # last_updated_at
     await cur.execute(query, tuple(values))
@@ -97,7 +97,7 @@ async def update_rss_source_last_fetched(cur, source_id):
         WHERE id = %s
     """, (source_id,))
 
-async def process_rss_item_transaction(cur, item, original_plain_content, url_hash, content_hash, processed_plain_content, summary, tags, genre_id, topic_id, language, read_time):
+async def process_rss_item_transaction(cur, item, url_hash, html_hash, plain_content, summary, tags, genre_id, topic_id, language, read_time):
     published_at = parse_datetime(item['published_at'])
     if not published_at:
         logging.error(f"解析published_at日期失败，项目：{item['url']}")
@@ -111,9 +111,9 @@ async def process_rss_item_transaction(cur, item, original_plain_content, url_ha
         'url': item['url'],
         'url_hash': url_hash,
         'title': item['title'],
-        'content': item['content'],
-        'plain_content': processed_plain_content,
-        'content_hash': content_hash,
+        'original_html': item['original_html'],
+        'plain_content': plain_content,
+        'html_hash': html_hash,
         'published_at': published_at,
         'fetched_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'summary': summary,

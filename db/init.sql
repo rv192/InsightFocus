@@ -51,9 +51,9 @@ CREATE TABLE IF NOT EXISTS articles (
     url VARCHAR(2083) NOT NULL,
     url_hash VARCHAR(64) NOT NULL,
     title VARCHAR(255) NOT NULL,
-    content TEXT,
+    original_html TEXT,
     plain_content TEXT,
-    content_hash VARCHAR(64),
+    html_hash VARCHAR(64),
     published_at DATETIME,
     fetched_at DATETIME,
     summary TEXT,
@@ -139,7 +139,9 @@ INSERT INTO topics (id, name, description) VALUES
 (14, '历史', '回顾历史事件、人物传记、文化遗产等'),
 (15, '社会', '探讨社会现象、民生问题、社会发展等'),
 (16, '技术', '侧重于具体的技术应用、技能和讨论，例如编程、软件开发等'),
-(0, '其他', '不易归类于以上主题的内容');
+(17, '其他', '不易归类于以上主题的内容');
+-- 更新topics表中的'其他'项ID为0
+UPDATE topics SET id = 0 WHERE name = '其他';
 
 INSERT INTO genres (id, name, description) VALUES
 (1, '新闻报道', '客观报道时事，强调及时性和真实性'),
@@ -155,7 +157,10 @@ INSERT INTO genres (id, name, description) VALUES
 (11, '评论', '对书籍、电影、产品等进行评价'),
 (12, '博客文章', '个人或机构发布的观点、经验分享等'),
 (13, '多媒体内容', '以视频、音频、图片等为主，或结合多种媒体形式呈现的文章'),
-(0, '其他', '不易归类于以上类型的文章');
+(14, '其他', '不易归类于以上类型的文章');
+
+-- 更新genres表中的'其他'项ID为0
+UPDATE genres SET id = 0 WHERE name = '其他';
 
 -- 在rssSources表插入测试数据
 INSERT INTO rssSources (url, name, description) VALUES
