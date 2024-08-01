@@ -27,20 +27,10 @@ async def process_rss_items(db_pool, rss_items):
             continue
 
         crawler = GeneralCrawler()
-        crawler.info()
-        resultCrawler = crawler.crawl(url)
-        original_content = resultCrawler['content']
+        resultCrawler =  await crawler.crawl_async(url)
+        original_html = resultCrawler['content']
+        item['original_html'] = original_html
         plain_content = resultCrawler['plain_content']
-
-        result = {
-            "status_code": 200,  # 默认状态码为200（成功）
-            "error_message": "",
-            "content": "",
-            "plain_content": "",
-            "title": "",
-            "author": "",
-            "publish_date": ""
-        }
 
         if resultCrawler.get('status_code') != 200:
             continue
@@ -98,7 +88,7 @@ async def process_rss_items(db_pool, rss_items):
             else:
                 logging.warning(f"文章分类失败，项目：{url}。使用默认分类。")
 
-            language = detect_language(original_content)
+            language = detect_language(original_html)
             read_time = estimate_read_time(plain_content)
 
             # 在一个事务中处理整个RSS项目

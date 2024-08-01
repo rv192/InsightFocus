@@ -10,5 +10,6 @@ lxml
 PyYAML
 feedparser
 beautifulsoup4
+gne
 python-dotenv
 openai
