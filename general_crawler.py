@@ -27,12 +27,19 @@ class BrowserManager:
         return cls._instance
 
     async def init_browser(self):
-        if self._browser is None or self._page_count >= self._restart_threshold:
+        if self._browser is None or not self._browser.isConnected() or self._page_count >= self._restart_threshold:
             if self._browser:
                 await self.close_browser()
-            self._browser = await launch(headless=True)
+            self._browser = await launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+                ignoreHTTPSErrors=True,
+                handleSIGINT=False,
+                handleSIGTERM=False,
+                handleSIGHUP=False
+            )
             self._page_count = 0
-            logging.debug("新浏览器实例完成初始化。")
+            logging.info("新浏览器实例创建完成")
 
     async def get_page(self):
         await self.init_browser()
