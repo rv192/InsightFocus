@@ -4,8 +4,6 @@ from agents.userFocusAgent import UserFocusAgent
 from db_operations import with_transaction, get_recent_articles, get_user_focuses, add_to_focused_contents
 
 async def process_user_focuses(db_pool):
-    logging.info("开始处理用户关注内容")
-
     try:
         recent_articles = await with_transaction(db_pool, lambda cur: get_recent_articles(cur, hours=24))
         logging.info(f"获取到 {len(recent_articles)} 篇最近的文章")
@@ -47,9 +45,9 @@ async def get_all_users(db_pool):
     return [user[0] for user in users]
 
 async def run_focus_processing(db_pool):
-    logging.info("开始运行关注内容处理")
+    logging.info("开始运行关注内容批处理")
     try:
         await process_user_focuses(db_pool)
-        logging.info("关注内容处理完成")
+        logging.info("关注内容批处理完成")
     except Exception as e:
-        logging.error(f"关注内容处理过程中出错: {str(e)}")
+        logging.error(f"关注内容批处理过程中出错: {str(e)}")

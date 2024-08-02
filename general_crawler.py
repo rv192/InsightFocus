@@ -32,16 +32,18 @@ class BrowserManager:
                 await self.close_browser()
             self._browser = await launch(headless=True)
             self._page_count = 0
-            logging.info("New browser instance created")
+            logging.debug("新浏览器实例完成初始化。")
 
     async def get_page(self):
         await self.init_browser()
         page = await self._browser.newPage()
         self._page_count += 1
+        logging.debug(f"第{self._page_count}次创建新的Tab页")
         return page
 
     async def close_page(self, page):
         if page:
+            logging.debug("关闭当前Tab页")
             await page.close()
 
     async def close_browser(self):
@@ -49,7 +51,7 @@ class BrowserManager:
             await self._browser.close()
             self._browser = None
             self._page_count = 0
-            logging.info("Browser instance closed")
+            logging.debug("浏览器实例关闭")
 
     @classmethod
     def register_shutdown(cls):
@@ -65,9 +67,11 @@ class GeneralCrawler:
         self.browser_manager = None
         self.scraper_map = {
             "mp.weixin.qq.com": self.wechat_handler
+            # TODO: 定义更多特定域爬虫处理器
         }
         self.ajax_domains = [
             "36kr.com"
+            # TODO: 定义更多JS动态页面域
         ]
 
     async def init_browser_manager(self):
@@ -82,10 +86,10 @@ class GeneralCrawler:
             page = await self.browser_manager.get_page()
             await page.goto(url, waitUntil='networkidle0')
             content = await page.content()
-            logging.info(f"Successfully fetched HTML content from {url} using pyppeteer")
+            logging.info(f"Pyppeteer：成功获取{url}的HTML内容")
             return content
         except Exception as exc:
-            logging.error(f"Pyppeteer error: {exc}")
+            logging.error(f"Pyppeteer： 获取HTML异常，原因是{exc}")
             return None
         finally:
             if page:
@@ -103,13 +107,13 @@ class GeneralCrawler:
                     headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/604.1 Edg/112.0.100.0'}
                     response = await client.get(url, headers=headers, timeout=30)
                     response.raise_for_status()
-                    logging.info(f"Successfully fetched HTML content from {url} using httpx")
+                    logging.info(f"Httpx：成功获取{url}的HTML内容")
                     return response.text
                 except httpx.RequestError as exc:
-                    logging.error(f"HTTP request error: {exc}")
+                    logging.error(f"Httpx：Http请求失败，详情是 {exc}")
                     return None
                 except httpx.HTTPStatusError as exc:
-                    logging.error(f"HTTP status error: {exc}")
+                    logging.error(f"Httpx：Http状态异常，详情是 {exc}")
                     return None
 
     async def extract_content(self, html_content: str, url: str) -> Dict[str, str]:
@@ -123,10 +127,14 @@ class GeneralCrawler:
         try:
             extractor = GeneralNewsExtractor()
             gne_result = extractor.extract(html_content, noise_node_list=['//div[@class="comment-list"]'])
-            result['title'] = gne_result.get('title', '')
-            result['author'] = gne_result.get('author', '')
-            result['publish_date'] = gne_result.get('publish_time', '')
-            result['plain_content'] = gne_result.get('content', '')
+            if gne_result:
+                result['title'] = gne_result.get('title', '')
+                result['author'] = gne_result.get('author', '')
+                result['publish_date'] = gne_result.get('publish_time', '')
+                result['plain_content'] = gne_result.get('content', '')
+                logging.info("NewsExtractor：内容提取成功")
+            else:
+                logging.warning("NewsExtractor：内容提取失败，即将使用Trafilatura重试")
 
             if not result['plain_content']:
                 downloaded = trafilatura.extract(html_content, url=url, output_format="json", with_metadata=True, include_comments=False, include_images=True)
@@ -140,22 +148,17 @@ class GeneralCrawler:
                 else:
                     logging.warning("Trafilatura：内容提取失败")
 
-            if result['plain_content']:
-                logging.info("内容提取成功")
-            else:
-                logging.warning("内容提取失败")
-
         except Exception as exc:
             logging.error(f"Content extraction error: {exc}")
         
         return result
 
     def wechat_handler(self, html_content: str) -> Dict[str, str]:
-        logging.info("Using specific handler for mp.weixin.qq.com")
+        logging.info("使用专用爬虫处理域：mp.weixin.qq.com")
         return {"title": "Example Title", "author": "Example Author", "publish_date": "2024-07-25", "plain_content": "Example Content"}
 
     def llm_fallback(self, html_content: str, url: str) -> Dict[str, str]:
-        logging.info("Using LLM fallback for content extraction")
+        logging.info("尝试使用大模型提取正文内容")
         return {
             "title": "Fallback Title",
             "author": "Fallback Author",
@@ -177,7 +180,7 @@ class GeneralCrawler:
         html_content = await self.fetch_html_async(url)
         if not html_content:
             result["status_code"] = -1
-            result["error_message"] = "Failed to fetch HTML content"
+            result["error_message"] = "最终获取HTML页面失败"
             return result
 
         result["original_html"] = html_content
@@ -191,7 +194,7 @@ class GeneralCrawler:
             extracted_data = await self.extract_content(html_content, url)
 
         if not extracted_data['plain_content']:
-            result["error_message"] += " Content extraction failed. Using LLM fallback."
+            result["error_message"] += "正文提取失败，尝试使用大模型作为兜底方案提取正文"
             extracted_data = self.llm_fallback(html_content, url)
 
         result.update(extracted_data)
