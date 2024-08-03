@@ -9,7 +9,6 @@ from typing import Dict, Union
 from trafilatura import extract
 from gne import GeneralNewsExtractor
 import json
-
 class BrowserManager:
     _instance = None
     _browser = None
@@ -19,21 +18,16 @@ class BrowserManager:
 
     @classmethod
     async def get_instance(cls):
-        logging.debug("Entering get_instance method")
         if cls._instance is None:
-            logging.debug("Instance is None, creating new instance")
             async with cls._lock:
                 if cls._instance is None:
-                    logging.debug("Creating new BrowserManager instance")
                     cls._instance = cls()
-                    logging.debug("Calling init_browser")
                     await cls._instance.init_browser()
-        logging.debug("Returning BrowserManager instance")
         return cls._instance
 
     async def init_browser(self):
         logging.debug("Entering init_browser method")
-        if self._browser is None or not self._browser.isConnected() or self._page_count >= self._restart_threshold:
+        if self._browser is None or self._page_count >= self._restart_threshold:
             logging.debug("Creating new browser instance")
             if self._browser:
                 logging.debug("Closing existing browser")
@@ -43,10 +37,7 @@ class BrowserManager:
                 self._browser = await launch(
                     headless=True,
                     args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-                    ignoreHTTPSErrors=True,
-                    handleSIGINT=False,
-                    handleSIGTERM=False,
-                    handleSIGHUP=False
+                    ignoreHTTPSErrors=True
                 )
                 self._page_count = 0
                 logging.info("New browser instance created successfully")
@@ -61,23 +52,28 @@ class BrowserManager:
         if self._browser is None:
             logging.error("Browser instance is None")
             raise Exception("Browser instance not properly initialized")
-        logging.debug("Creating new page")
-        page = await self._browser.newPage()
-        self._page_count += 1
-        logging.debug(f"New tab created (count: {self._page_count})")
-        return page
+        try:
+            logging.debug("Creating new page")
+            page = await self._browser.newPage()
+            self._page_count += 1
+            logging.debug(f"New tab created (count: {self._page_count})")
+            return page
+        except Exception as e:
+            logging.error(f"Error creating new page: {e}")
+            raise
 
     async def close_page(self, page):
         if page:
-            logging.debug("关闭当前Tab页")
+            logging.debug("Closing page")
             await page.close()
 
     async def close_browser(self):
         if self._browser:
+            logging.debug("Closing browser")
             await self._browser.close()
             self._browser = None
             self._page_count = 0
-            logging.debug("浏览器实例关闭")
+            logging.debug("Browser instance closed")
 
     @classmethod
     def register_shutdown(cls):
@@ -122,7 +118,7 @@ class GeneralCrawler:
             logging.info(f"Successfully fetched content for {url}")
             return content
         except Exception as exc:
-            logging.error(f"Error fetching HTML with Pyppeteer: {exc}")
+            logging.error(f"Error fetching HTML with Pyppeteer: {exc}", exc_info=True)
             return None
         finally:
             if page:
