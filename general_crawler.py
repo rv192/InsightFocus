@@ -30,19 +30,26 @@ class BrowserManager:
         if self._browser is None or not self._browser.isConnected() or self._page_count >= self._restart_threshold:
             if self._browser:
                 await self.close_browser()
-            self._browser = await launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-                ignoreHTTPSErrors=True,
-                handleSIGINT=False,
-                handleSIGTERM=False,
-                handleSIGHUP=False
-            )
-            self._page_count = 0
-            logging.info("新浏览器实例创建完成")
+            try:
+                self._browser = await launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+                    ignoreHTTPSErrors=True,
+                    handleSIGINT=False,
+                    handleSIGTERM=False,
+                    handleSIGHUP=False
+                )
+                self._page_count = 0
+                logging.info("新浏览器实例创建完成")
+            except Exception as e:
+                logging.error(f"创建浏览器实例失败: {e}")
+                self._browser = None
+                raise
 
     async def get_page(self):
         await self.init_browser()
+        if self._browser is None:
+            raise Exception("浏览器实例未正确初始化")
         page = await self._browser.newPage()
         self._page_count += 1
         logging.debug(f"第{self._page_count}次创建新的Tab页")
@@ -195,17 +202,21 @@ class GeneralCrawler:
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
 
-        if domain in self.scraper_map:
-            extracted_data = self.scraper_map[domain](html_content)
-        else:
-            extracted_data = await self.extract_content(html_content, url)
+        try:
+            if domain in self.scraper_map:
+                extracted_data = self.scraper_map[domain](html_content)
+            else:
+                extracted_data = await self.extract_content(html_content, url)
 
-        if not extracted_data['plain_content']:
-            result["error_message"] += "正文提取失败，尝试使用大模型作为兜底方案提取正文"
-            extracted_data = self.llm_fallback(html_content, url)
+            if not extracted_data['plain_content']:
+                result["error_message"] += "正文提取失败，尝试使用大模型作为兜底方案提取正文"
+                extracted_data = self.llm_fallback(html_content, url)
 
-        result.update(extracted_data)
+            result.update(extracted_data)
+        except Exception as e:
+            result["status_code"] = -1
+            result["error_message"] = f"内容提取失败：{str(e)}"
+
         return result
-
 # 在应用启动时注册关闭函数
 BrowserManager.register_shutdown()
