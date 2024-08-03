@@ -8,7 +8,7 @@ from focus_processor import run_focus_processing  # 导入新的用户关注处�
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 async def fetch_and_process_rss(db_pool):
     rss_items = await fetch_all_rss_sources(db_pool)

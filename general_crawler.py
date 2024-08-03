@@ -19,18 +19,27 @@ class BrowserManager:
 
     @classmethod
     async def get_instance(cls):
+        logging.debug("Entering get_instance method")
         if cls._instance is None:
+            logging.debug("Instance is None, creating new instance")
             async with cls._lock:
                 if cls._instance is None:
+                    logging.debug("Creating new BrowserManager instance")
                     cls._instance = cls()
+                    logging.debug("Calling init_browser")
                     await cls._instance.init_browser()
+        logging.debug("Returning BrowserManager instance")
         return cls._instance
 
     async def init_browser(self):
+        logging.debug("Entering init_browser method")
         if self._browser is None or not self._browser.isConnected() or self._page_count >= self._restart_threshold:
+            logging.debug("Creating new browser instance")
             if self._browser:
+                logging.debug("Closing existing browser")
                 await self.close_browser()
             try:
+                logging.debug("Launching new browser")
                 self._browser = await launch(
                     headless=True,
                     args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -40,19 +49,22 @@ class BrowserManager:
                     handleSIGHUP=False
                 )
                 self._page_count = 0
-                logging.info("新浏览器实例创建完成")
+                logging.info("New browser instance created successfully")
             except Exception as e:
-                logging.error(f"创建浏览器实例失败: {e}")
+                logging.error(f"Failed to create browser instance: {e}")
                 self._browser = None
                 raise
 
     async def get_page(self):
+        logging.debug("Entering get_page method")
         await self.init_browser()
         if self._browser is None:
-            raise Exception("浏览器实例未正确初始化")
+            logging.error("Browser instance is None")
+            raise Exception("Browser instance not properly initialized")
+        logging.debug("Creating new page")
         page = await self._browser.newPage()
         self._page_count += 1
-        logging.debug(f"第{self._page_count}次创建新的Tab页")
+        logging.debug(f"New tab created (count: {self._page_count})")
         return page
 
     async def close_page(self, page):
@@ -89,24 +101,32 @@ class GeneralCrawler:
         ]
 
     async def init_browser_manager(self):
+        logging.debug("Initializing BrowserManager")
         self.browser_manager = await BrowserManager.get_instance()
+        logging.debug("BrowserManager initialized")
 
     async def fetch_with_pyppeteer(self, url: str) -> Union[str, None]:
+        logging.debug(f"Fetching URL with Pyppeteer: {url}")
         if not self.browser_manager:
+            logging.debug("BrowserManager not initialized, initializing now")
             await self.init_browser_manager()
         
         page = None
         try:
+            logging.debug("Getting new page")
             page = await self.browser_manager.get_page()
+            logging.debug(f"Navigating to URL: {url}")
             await page.goto(url, waitUntil='networkidle0')
+            logging.debug("Getting page content")
             content = await page.content()
-            logging.info(f"Pyppeteer：成功获取{url}的HTML内容")
+            logging.info(f"Successfully fetched content for {url}")
             return content
         except Exception as exc:
-            logging.error(f"Pyppeteer： 获取HTML异常，原因是{exc}")
+            logging.error(f"Error fetching HTML with Pyppeteer: {exc}")
             return None
         finally:
             if page:
+                logging.debug("Closing page")
                 await self.browser_manager.close_page(page)
 
     async def fetch_html_async(self, url: str) -> Union[str, None]:
