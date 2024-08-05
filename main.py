@@ -1,14 +1,21 @@
 import asyncio
 import logging
+import os
 from dotenv import load_dotenv
 from rss_parser import fetch_all_rss_sources
 from content_processor import process_rss_items
 from db_operations import get_db_pool
-from focus_processor import run_focus_processing  # 导入新的用户关注处理函数
+from focus_processor import run_focus_processing
+from utils import get_env  # 导入新的用户关注处理函数
 
-load_dotenv()
+log_level = get_env('LOG_LEVEL', 'INFO', str)
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# 将字符串转换为日志级别常量
+numeric_level = getattr(logging, log_level.upper(), None)
+if not isinstance(numeric_level, int):
+    raise ValueError(f'Invalid log level: {log_level}')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 async def fetch_and_process_rss(db_pool):
     rss_items = await fetch_all_rss_sources(db_pool)

@@ -141,7 +141,7 @@ async def fetch_rss_sources(pool):
 async def get_recent_articles(cur, hours=24):
     """获取最近24小时内入库的文章"""
     query = """
-    SELECT id, genre_id, topic_id, title, plain_content, summary
+    SELECT id, genre_id, topic_id, title, plain_content, summary, url
     FROM articles
     WHERE fetched_at >= %s
     """
@@ -162,7 +162,8 @@ async def get_recent_articles(cur, hours=24):
             'plain_content': row[4],
             'summary': row[5],
             'genre': genre_mapping.get(row[1], '未知类型'),
-            'topic': topic_mapping.get(row[2], '未知分类')
+            'topic': topic_mapping.get(row[2], '未知分类'),
+            'url': row[6]
         }
         for row in results
     ]

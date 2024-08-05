@@ -24,6 +24,9 @@ async def process_user_focus(db_pool, user_id, recent_articles):
     
     for article in recent_articles:
         for focus in user_focuses:
+            logging.info(f"-----------------------------------------------------------------------")
+            logging.info(f"开始处理URL：{article['url']}")
+            logging.info(f"文章标题：{article['title']}")
             is_relevant = await UserFocusAgent().judge_article_relevance(article, focus['content'])
             
             if is_relevant:

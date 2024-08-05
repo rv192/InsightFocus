@@ -1,6 +1,6 @@
 -- InsightFocus 数据库初始化脚本
 -- 创建日期: 2024-07-22
--- 最后更新: 2024-07-22
+-- 最后更新: 2024-08-05
 -- 描述: 这个脚本创建了InsightFocus数据库及其所有相关表。
 --       它设置了文章、用户、RSS源、标签等实体的基本结构。
 
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS rssSources (
     url VARCHAR(2083) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    last_fetched_at DATETIME
+    last_fetched_at DATETIME,
+    update_interval INT NOT NULL DEFAULT 3600  -- 新增字段，默认更新间隔为1小时（3600秒）
 );
 
 -- 创建文章表
@@ -51,7 +52,7 @@ CREATE TABLE IF NOT EXISTS articles (
     url VARCHAR(2083) NOT NULL,
     url_hash VARCHAR(64) NOT NULL,
     title VARCHAR(255) NOT NULL,
-    original_html TEXT,
+    original_html LONGTEXT,  -- 修改为LONGTEXT类型
     plain_content TEXT,
     html_hash VARCHAR(64),
     published_at DATETIME,
@@ -60,27 +61,21 @@ CREATE TABLE IF NOT EXISTS articles (
     language VARCHAR(50),
     read_time INT,
     last_updated_at DATETIME,
-    UNIQUE KEY (url_hash),
-    FOREIGN KEY (source_id) REFERENCES rssSources(id),
-    FOREIGN KEY (genre_id) REFERENCES genres(id),
-    FOREIGN KEY (topic_id) REFERENCES topics(id)
+    UNIQUE KEY (url_hash)
 );
 
 -- 创建用户-RSS源关联表
 CREATE TABLE IF NOT EXISTS userRssSources (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    source_id INT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (source_id) REFERENCES rssSources(id)
+    source_id INT NOT NULL
 );
 
 -- 创建用户关注点表
 CREATE TABLE IF NOT EXISTS userFocuses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    content TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id)
+    content TEXT NOT NULL
 );
 
 -- 创建关注内容表
@@ -89,10 +84,7 @@ CREATE TABLE IF NOT EXISTS focusedContents (
     user_id INT NOT NULL,
     article_id BIGINT NOT NULL,
     focus_id INT NOT NULL,
-    created_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (article_id) REFERENCES articles(id),
-    FOREIGN KEY (focus_id) REFERENCES userFocuses(id)
+    created_at DATETIME
 );
 
 -- 创建用户文章状态表
@@ -101,9 +93,7 @@ CREATE TABLE IF NOT EXISTS userArticleStatus (
     user_id INT NOT NULL,
     article_id BIGINT NOT NULL,
     status ENUM('unread', 'read', 'read_later') NOT NULL,
-    updated_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES rssUsers(id),
-    FOREIGN KEY (article_id) REFERENCES articles(id)
+    updated_at DATETIME
 );
 
 -- 创建标签表
@@ -117,11 +107,10 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE TABLE IF NOT EXISTS article_tags (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     article_id BIGINT NOT NULL,
-    tag_id INT NOT NULL,
-    FOREIGN KEY (article_id) REFERENCES articles(id),
-    FOREIGN KEY (tag_id) REFERENCES tags(id)
+    tag_id INT NOT NULL
 );
 
+-- 以下是插入数据的部分，保持不变
 INSERT INTO topics (id, name, description) VALUES
 (1, '时事政治', '关注国内外政治、经济、社会等重大事件'),
 (2, '商业财经', '涵盖商业活动、金融市场、经济趋势等方面'),
@@ -139,9 +128,7 @@ INSERT INTO topics (id, name, description) VALUES
 (14, '历史', '回顾历史事件、人物传记、文化遗产等'),
 (15, '社会', '探讨社会现象、民生问题、社会发展等'),
 (16, '技术', '侧重于具体的技术应用、技能和讨论，例如编程、软件开发等'),
-(17, '其他', '不易归类于以上主题的内容');
--- 更新topics表中的'其他'项ID为0
-UPDATE topics SET id = 0 WHERE name = '其他';
+(0, '其他', '不易归类于以上主题的内容');
 
 INSERT INTO genres (id, name, description) VALUES
 (1, '新闻报道', '客观报道时事，强调及时性和真实性'),
@@ -157,10 +144,7 @@ INSERT INTO genres (id, name, description) VALUES
 (11, '评论', '对书籍、电影、产品等进行评价'),
 (12, '博客文章', '个人或机构发布的观点、经验分享等'),
 (13, '多媒体内容', '以视频、音频、图片等为主，或结合多种媒体形式呈现的文章'),
-(14, '其他', '不易归类于以上类型的文章');
-
--- 更新genres表中的'其他'项ID为0
-UPDATE genres SET id = 0 WHERE name = '其他';
+(0, '其他', '不易归类于以上类型的文章');
 
 -- 在rssSources表插入测试数据
 INSERT INTO rssSources (url, name, description) VALUES

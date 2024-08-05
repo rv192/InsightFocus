@@ -1,7 +1,9 @@
 import hashlib
 import logging
+import os
 from dateutil import parser
 
+from dotenv import load_dotenv
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
@@ -37,3 +39,17 @@ def parse_datetime(dt_string):
     except ValueError:
         logging.warning(f"无法解析日期时间字符串: {dt_string}")
         return None
+    
+def get_env(key, default=None, var_type=str):
+    load_dotenv()
+    value = os.getenv(key, default)
+    if value is None:
+        return default
+        
+    if var_type == int:
+        return int(value)
+    elif var_type == float:
+        return float(value)
+    elif var_type == bool:
+        return value.lower() in ('true', '1', 'yes', 'on')
+    return value
